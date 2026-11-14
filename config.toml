@@ -1,0 +1,7 @@
+[permissions]
+shell_default = "ask"
+file_write_default = "ask"
+
+[permissions.shell_rules]
+pwd = "allow"
+"printf DENIED" = "deny"

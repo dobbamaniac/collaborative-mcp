@@ -1,3 +1,5 @@
+import tomllib
+from pathlib import Path
 from dataclasses import dataclass
 
 from .models import FileWrite, Operation, Permission, ShellCommand
@@ -24,3 +26,45 @@ def evaluate(operation: Operation, policy: Policy) -> Permission:
 
     # Unknown operations are never implicitly authorized.
     return Permission.DENY
+
+
+def parse_permission(value: str) -> Permission:
+    if not isinstance(value, str):
+        raise ValueError("Permission must be a string")
+    try:
+        return Permission(value)
+    except ValueError as exc:
+        raise ValueError(f"Invalid permission: {value!r}") from exc
+
+
+def load_policy(path: Path) -> Policy:
+    with path.open("rb") as file:
+        config = tomllib.load(file)
+
+    if set(config) != {"permissions"}:
+        raise ValueError("Configuration must contain a [permissions] table")
+
+    permissions = config["permissions"]
+    allowed_keys = {
+        "shell_default",
+        "file_write_default",
+        "shell_rules",
+    }
+
+    unknown = set(permissions) - allowed_keys
+    if unknown:
+        raise ValueError(f"Unknown permission settings: {unknown}")
+
+    rules = permissions.get("shell_rules", {})
+    if not isinstance(rules, dict):
+        raise ValueError("shell_rules must be a table")
+
+    return Policy(
+        shell_default=parse_permission(permissions.get("shell_default", "ask")),
+        file_write_default=parse_permission(permissions.get("file_write_default", "ask")),
+        shell_rules=tuple(
+            (command, parse_permission(decision))
+            for command, decision in rules.items()
+        ),
+    )
+
